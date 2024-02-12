@@ -1,6 +1,7 @@
 const cheerio = require('cheerio');
 const fs = require('fs');
 const path = require('path');
+const https = require('https');
 
 function loadTemplate() {
     return new Promise((resolve, reject) => {
@@ -19,15 +20,30 @@ function cleanUrl(url) {
     return myURL.protocol + '//' + myURL.host + myURL.pathname;
 }
 
-function donwloadPage(url) {
-    const rp = require('request-promise');
-    return rp(url + '/fullscreen')
+function downloadPage( url ) {
+    return new Promise((resolve, reject) => {
+        https.request(url + '/fullscreen', function(res) {
+                console.log('STATUS: ' + res.statusCode);
+                console.log('HEADERS: ' + JSON.stringify(res.headers));
+                res.setEncoding('utf8');
+                res.on('data', function (chunk) {
+                    console.log('BODY: ' + chunk);
+                    // if (!error && response.statusCode == 200) {
+                    //     const $ = cheerio.load(html);
+                    //     $('body').find('script').remove();
+                    //     return $('body').html();
+                    // }
+                    return 'hello world!';
+                });
+            })
+        }
+
+    );
 }
 
 function downloadImage(fileName, url) {
     return new Promise((resolve, reject) => {
-        const request = require('request');
-        request(url).on('response', function (res) {
+        https.request(url).on('response', function (res) {
             const fws = fs.createWriteStream(fileName);
             res.pipe(fws);
             res.on('end', resolve);
@@ -41,7 +57,9 @@ function main(slidesURL, folderName) {
     slidesURL = cleanUrl(slidesURL);
     if (!folderName) {
         const lastIndex = slidesURL.lastIndexOf('/');
-        folderName = slidesURL.substr(lastIndex + 1);
+        folderName = process.cwd();
+        folderName = path.join(folderName, 'download');
+        folderName = path.join(folderName, slidesURL.substr(lastIndex + 1));
     }
 
     const imgFolder = path.join(folderName, 'img');
@@ -49,17 +67,18 @@ function main(slidesURL, folderName) {
 
     Promise.all([
         loadTemplate(),
-        donwloadPage(slidesURL).then((html) => {
-            const $ = cheerio.load(html);
-            $('body').find('script').remove();
-            return $('body').html();
-        })
+        downloadPage(slidesURL)
     ]).then(([template, slides]) => {
+        console.log(slides);
         const $ = cheerio.load(template);
 
-        $('.insert').after(slides);
+        $('.slides').after(slides);
+        $('title').text('my title');
 
         $('img[data-src]').map((a, b) => {
+            console.log(a);
+            console.log(b);
+            console.log('---');
             const img = $(b).attr('data-src');
             if (img.startsWith('https://s3.amazonaws.com')) {
                 const lastIndex = img.lastIndexOf('/');
@@ -77,7 +96,5 @@ function main(slidesURL, folderName) {
     })
 
 }
-
-const slides = 'https://slides.com/andes/sprint-75-instituciones-5bd030';
 
 module.exports = main;
